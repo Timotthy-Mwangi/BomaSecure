@@ -1,0 +1,48 @@
+{
+  "name": "bomasecure-backend",
+  "version": "1.0.0",
+  "description": "BomaSecure Smart Apartment Security API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:scalable": "node server-scalable.js",
+    "dev": "nodemon server.js",
+    "dev:scalable": "nodemon server-scalable.js"
+  },
+  "keywords": [
+    "apartment",
+    "security",
+    "visitor",
+    "management",
+    "kenya"
+  ],
+  "author": "BomaSecure",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.478.0",
+    "@aws-sdk/s3-request-presigner": "^3.478.0",
+    "@socket.io/redis-adapter": "^8.2.1",
+    "axios": "^1.6.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-sanitizer": "^1.0.5",
+    "helmet": "^7.1.0",
+    "hpp": "^0.2.3",
+    "ioredis": "^5.10.1",
+    "paystack": "^2.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.0",
+    "multer": "^2.1.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.2",
+    "xss-clean": "^0.1.4",
+    "mongo-sanitize": "^1.1.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

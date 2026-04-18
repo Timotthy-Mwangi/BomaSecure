@@ -1,0 +1,8 @@
+{
+  "short_name": "BomaSecure",
+  "name": "BomaSecure - Smart Apartment Security System",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0066CC",
+  "background_color": "#0066CC"
+}

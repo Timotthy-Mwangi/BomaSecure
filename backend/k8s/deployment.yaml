@@ -1,0 +1,286 @@
+# Kubernetes Deployment for BomaSecure API
+# Auto-scaling configuration for 1M+ users
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bomasecure-api
+  namespace: default
+  labels:
+    app: bomasecure-api
+    version: v1
+spec:
+  replicas: 10  # Initial replicas, auto-scales to 100+
+  selector:
+    matchLabels:
+      app: bomasecure-api
+  template:
+    metadata:
+      labels:
+        app: bomasecure-api
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "4200"
+        prometheus.io/path: "/api/metrics"
+    spec:
+      containers:
+      - name: api
+        image: bomasecure/api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4200
+          name: http
+          protocol: TCP
+        
+        # Resource requests and limits
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        # Environment variables
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "4200"
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: bomasecure-secrets
+              key: mongodb-uri
+        - name: MONGODB_READ_URI
+          valueFrom:
+            secretKeyRef:
+              name: bomasecure-secrets
+              key: mongodb-read-uri
+              optional: true
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: bomasecure-secrets
+              key: redis-host
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bomasecure-secrets
+              key: redis-password
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: bomasecure-secrets
+              key: jwt-secret
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: bomasecure-config
+              key: allowed-origins
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /api/ready
+            port: 4200
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Startup probe for slow-starting containers
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        
+        # Volume mounts
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      
+      # Pod disruption budget
+      terminationGracePeriodSeconds: 30
+      
+      # Affinity rules for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - bomasecure-api
+              topologyKey: kubernetes.io/hostname
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bomasecure-api-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bomasecure-api
+  minReplicas: 10
+  maxReplicas: 100
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: 1000
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 10
+        periodSeconds: 60
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 5
+        periodSeconds: 60
+      selectPolicy: Min
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bomasecure-api-pdb
+  namespace: default
+spec:
+  minAvailable: 5
+  selector:
+    matchLabels:
+      app: bomasecure-api
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: bomasecure-api-service
+  namespace: default
+  labels:
+    app: bomasecure-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 4200
+    protocol: TCP
+    name: http
+  selector:
+    app: bomasecure-api
+
+---
+# Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bomasecure-api-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  tls:
+  - hosts:
+    - api.bomasecure.com
+    secretName: bomasecure-tls
+  rules:
+  - host: api.bomasecure.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bomasecure-api-service
+            port:
+              number: 80
+
+---
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bomasecure-config
+  namespace: default
+data:
+  allowed-origins: "https://bomasecure.com,https://www.bomasecure.com"
+  node-env: "production"
+  log-level: "info"
+
+---
+# Secrets (create separately)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bomasecure-secrets
+  namespace: default
+type: Opaque
+data:
+  mongodb-uri: <base64-encoded-mongodb-uri>
+  mongodb-read-uri: <base64-encoded-mongodb-read-uri>
+  redis-host: <base64-encoded-redis-host>
+  redis-password: <base64-encoded-redis-password>
+  jwt-secret: <base64-encoded-jwt-secret>

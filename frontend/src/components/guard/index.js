@@ -1,0 +1,11 @@
+export { default as GuardDashboard } from './Dashboard';
+export { default as GuardCheckIn } from './CheckIn';
+export { default as GuardDeliveries } from './Deliveries';
+export { default as GuardLogs } from './Logs';
+export { default as GuardQRScanner } from './QRScanner';
+export { default as GuardRegister } from './Register';
+export { default as GuardEmergency } from './GuardEmergency';
+export { default as GuardStaff } from './GuardStaff';
+export { default as GuardVisitors } from './Visitors';
+export { default as GuardAnnouncements } from './GuardAnnouncements';
+export { default as GuardMaintenance } from './Maintenance';
